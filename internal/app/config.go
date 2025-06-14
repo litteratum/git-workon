@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ func NewDefaultConfig() Config {
 	}
 }
 
-func loadConfig() Config {
+func LoadConfig() Config {
 	err := configdir.MakePath(ConfigDir)
 	if err != nil {
 		log.Fatalf("failed to ensure the configuration directory exists: %s", err)
