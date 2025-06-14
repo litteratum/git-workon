@@ -36,7 +36,6 @@ func NewDefaultConfig() Config {
 	}
 }
 
-// TODO: support ~/
 func loadConfig() Config {
 	err := configdir.MakePath(ConfigDir)
 	if err != nil {

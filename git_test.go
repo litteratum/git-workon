@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestClone(t *testing.T) {
@@ -13,10 +15,10 @@ func TestClone(t *testing.T) {
 		source := "source"
 		destination := "dest"
 		err := git.Clone(source, destination)
-		assertNotError(t, err)
-		assertHistory(
+		require.NoError(t, err)
+		require.Equal(
 			t,
-			cmd,
+			cmd.history,
 			[]map[string]any{
 				{
 					"_method": "Run",
@@ -32,7 +34,7 @@ func TestClone(t *testing.T) {
 		}
 		git := NewGitAPI(cmd)
 		err := git.Clone("s", "d")
-		assertError(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -42,10 +44,10 @@ func TestGetProjectState(t *testing.T) {
 		git := NewGitAPI(cmd)
 
 		state, err := git.GetProjectState("proj/path")
-		assertNotError(t, err)
-		assertHistory(
+		require.NoError(t, err)
+		require.Equal(
 			t,
-			cmd,
+			cmd.history,
 			[]map[string]any{
 				{
 					"_method": "RunCwd",
@@ -77,6 +79,7 @@ func TestGetProjectState(t *testing.T) {
 		if !state.Clean() {
 			t.Fatalf("expected clean state, got %v", state)
 		}
+		require.True(t, state.Clean(), "state is not clean: %v", state)
 	})
 
 	tests := map[string]struct {
@@ -126,10 +129,8 @@ func TestGetProjectState(t *testing.T) {
 			git := NewGitAPI(cmd)
 
 			state, err := git.GetProjectState("proj/path")
-			assertNotError(t, err)
-			if state.Clean() {
-				t.Fatalf("expected not clean state, got %v", state)
-			}
+			require.NoError(t, err)
+			require.False(t, state.Clean())
 		})
 	}
 }

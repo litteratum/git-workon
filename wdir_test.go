@@ -6,12 +6,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type wdComponents struct {
-	dir string
-	fs  FileSystem
-	git Git
+	dir   string
+	fs    FileSystem
+	git   Git
+	cache ICache
 }
 
 type FakeRepo struct {
@@ -118,20 +121,43 @@ func (fg *FakeGit) Clone(source, destination string) error {
 	return nil
 }
 
+type FakeCache struct {
+	Cache
+	Writes int
+}
+
+func (fc *FakeCache) Write() {
+	fc.Writes++
+}
+
+func NewEmptyFakeCache() *FakeCache {
+	return &FakeCache{
+		Cache: Cache{
+			Data: map[string]ProjectInfo{},
+		},
+	}
+}
+func NewFakeCache(data map[string]ProjectInfo) *FakeCache {
+	return &FakeCache{
+		Cache: Cache{
+			Data: data,
+		},
+	}
+}
+
 func buildWorkingDir(comps wdComponents) WorkingDir {
 	if comps.dir == "" {
 		comps.dir = "/dwd"
+	}
+	if comps.cache == nil {
+		comps.cache = NewEmptyFakeCache()
 	}
 	return WorkingDir{
 		directory: comps.dir,
 		fs:        comps.fs,
 		git:       comps.git,
-	}
-}
-
-func assertNotError(t *testing.T, err error) {
-	if err != nil {
-		t.Fatalf("did not expect error, got %s", err)
+		config:    NewDefaultConfig(),
+		cache:     comps.cache,
 	}
 }
 
@@ -145,16 +171,17 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start([]string{"proj"}, []string{"dsource", "dsource2"}, []string{"vi"}, StartOpts{Open: false})
-		assertNotError(t, err)
+		err := wd.Start(
+			[]string{"proj"},
+			[]string{"dsource", "dsource2"},
+			"vi",
+			StartOpts{Open: false},
+		)
 
+		require.NoError(t, err)
 		repo, ok := fs.repos["/dwd/proj"]
-		if !ok {
-			t.Fatalf("expected repo created")
-		}
-		if repo.opensCount != 0 {
-			t.Fatalf("expected repo to not be opened")
-		}
+		require.True(t, ok)
+		require.Equal(t, repo.opensCount, 0)
 	})
 	t.Run("no project; cloned; opened", func(t *testing.T) {
 		fs := NewFakeFS().WithEditors(map[string]FakeEditor{"vim": {}})
@@ -165,16 +192,11 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start([]string{"proj"}, []string{"dsource"}, []string{"vim", "vi"}, StartOpts{Open: true})
-		assertNotError(t, err)
+		err := wd.Start([]string{"proj"}, []string{"dsource"}, "vim", StartOpts{Open: true})
+		require.NoError(t, err)
 
-		repo, ok := fs.repos["/dwd/proj"]
-		if !ok {
-			t.Fatalf("expected repo created")
-		}
-		if repo.opensCount != 1 {
-			t.Fatalf("expected repo to be opened, got %d", repo.opensCount)
-		}
+		repo := fs.repos["/dwd/proj"]
+		require.Equal(t, repo.opensCount, 1)
 	})
 	t.Run("project exists; not cloned; opened", func(t *testing.T) {
 		fs := NewFakeFS().WithEditors(
@@ -189,23 +211,57 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start([]string{"proj"}, []string{"dsource"}, []string{"vim", "vi"}, StartOpts{Open: true})
-		assertNotError(t, err)
+		err := wd.Start([]string{"proj"}, []string{"dsource"}, "vim", StartOpts{Open: true})
+		require.NoError(t, err)
 
 		repo := fs.repos["/dwd/proj"]
-		if repo.opensCount != 1 {
-			t.Fatalf("expected repo to be opened, got %d", repo.opensCount)
-		}
+		require.Equal(t, repo.opensCount, 1)
 	})
 	t.Run("projects are empty", func(t *testing.T) {
 		wd := buildWorkingDir(wdComponents{})
-		err := wd.Start([]string{}, []string{"s1"}, []string{}, StartOpts{})
-		assertError(t, err)
+		err := wd.Start([]string{}, []string{"s1"}, "", StartOpts{})
+		require.Error(t, err)
 	})
 	t.Run("sources are empty", func(t *testing.T) {
 		wd := buildWorkingDir(wdComponents{})
-		err := wd.Start([]string{"p1"}, []string{}, []string{}, StartOpts{})
-		assertError(t, err)
+		err := wd.Start([]string{"p1"}, []string{}, "", StartOpts{})
+		require.Error(t, err)
+	})
+	t.Run("source from cache", func(t *testing.T) {
+		fs := NewFakeFS().WithEditors(
+			map[string]FakeEditor{"vim": {}},
+		)
+		git := NewFakeGit(fs).WithSources([]string{"sc/p1", "s/p1"})
+		cache := NewFakeCache(
+			map[string]ProjectInfo{
+				"p1": {
+					Source: "sc",
+				},
+			},
+		)
+		wd := buildWorkingDir(wdComponents{
+			fs:    fs,
+			git:   git,
+			cache: cache,
+		})
+
+		err := wd.Start([]string{"p1"}, []string{}, "", StartOpts{})
+		require.NoError(t, err)
+		require.Equal(t, cache.Writes, 1)
+	})
+	t.Run("cloned source cached", func(t *testing.T) {
+		fs := NewFakeFS()
+		git := NewFakeGit(fs).WithSources([]string{"s/p1"})
+		cache := NewFakeCache(map[string]ProjectInfo{})
+		wd := buildWorkingDir(wdComponents{
+			fs:    fs,
+			git:   git,
+			cache: cache,
+		})
+
+		err := wd.Start([]string{"p1"}, []string{"s"}, "", StartOpts{})
+		require.NoError(t, err)
+		require.Equal(t, cache.Data, map[string]ProjectInfo{"p1": {Source: "s"}})
 	})
 }
 
@@ -242,11 +298,8 @@ func TestDone(t *testing.T) {
 					)
 
 					err := wd.Done([]string{"proj"}, DoneOpts{Force: true})
-					assertNotError(t, err)
-
-					if len(fs.repos) != 0 {
-						t.Fatalf("expected all repos to be removed, got %d", len(fs.repos))
-					}
+					require.NoError(t, err)
+					require.Len(t, fs.repos, 0)
 				},
 			)
 		}
@@ -265,11 +318,8 @@ func TestDone(t *testing.T) {
 			},
 		)
 		err := wd.Done([]string{"proj", "proj2"}, DoneOpts{})
-		assertNotError(t, err)
-
-		if len(fs.repos) != 0 {
-			t.Fatalf("expected all repos to be removed, got %d", len(fs.repos))
-		}
+		require.NoError(t, err)
+		require.Len(t, fs.repos, 0)
 	})
 	t.Run("specific projects; not clean; not removed", func(t *testing.T) {
 		fs := NewFakeFS().WithRepos(
@@ -291,11 +341,8 @@ func TestDone(t *testing.T) {
 			},
 		)
 		err := wd.Done([]string{"proj", "proj2"}, DoneOpts{})
-		assertNotError(t, err)
-
-		if len(fs.repos) != 1 {
-			t.Fatalf("expected 1 repo to be left, got %d", len(fs.repos))
-		}
+		require.NoError(t, err)
+		require.Len(t, fs.repos, 1)
 	})
 	t.Run("all projects", func(t *testing.T) {
 		fs := NewFakeFS().WithRepos(
@@ -312,10 +359,7 @@ func TestDone(t *testing.T) {
 			},
 		)
 		err := wd.Done([]string{}, DoneOpts{})
-		assertNotError(t, err)
-
-		if len(fs.repos) != 0 {
-			t.Fatalf("expected all repos to be removed, got %d", len(fs.repos))
-		}
+		require.NoError(t, err)
+		require.Len(t, fs.repos, 0)
 	})
 }

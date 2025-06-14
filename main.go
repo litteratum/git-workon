@@ -10,6 +10,7 @@ import (
 
 func main() {
 	config := loadConfig()
+	cache := NewCacheFromFile()
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "You must pass a subcommand: start, done or config")
@@ -44,11 +45,11 @@ func main() {
 	case "start":
 		startCmd.Parse(os.Args[2:])
 		ensureDir(directory, config.Dir)
-		wd := NewWorkingDir(*directory)
+		wd := NewWorkingDir(*directory, config, cache)
 		err := wd.Start(
 			startCmd.Args(),
-			getSources(*startSource, config.Sources),
-			getEditors(*startEditor, config.Editor),
+			*startSource,
+			*startEditor,
 			StartOpts{
 				Open: *startOpen,
 			},
@@ -59,7 +60,7 @@ func main() {
 	case "done":
 		doneCmd.Parse(os.Args[2:])
 		ensureDir(directory, config.Dir)
-		wd := NewWorkingDir(*directory)
+		wd := NewWorkingDir(*directory, config, cache)
 		err := wd.Done(
 			doneCmd.Args(),
 			DoneOpts{
@@ -71,41 +72,12 @@ func main() {
 		}
 	case "config":
 		configCmd.Parse(os.Args[2:])
-		config := loadConfig()
 		fmt.Println(config)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		fmt.Println("Available commands: start, done, config")
 		os.Exit(1)
 	}
-}
-
-func getEditors(cliEditor, configEditor string) []string {
-	editors := []string{}
-	if cliEditor != "" {
-		editors = append(editors, cliEditor)
-	}
-	if configEditor != "" {
-		editors = append(editors, configEditor)
-	}
-
-	envEditor, envEditorSet := os.LookupEnv("EDITOR")
-	if envEditorSet {
-		editors = append(editors, envEditor)
-	}
-	editors = append(editors, []string{"vim", "vi"}...)
-	return editors
-}
-
-func getSources(cliSources, configSources []string) []string {
-	sources := []string{}
-	sources = append(sources, cliSources...)
-	sources = append(sources, configSources...)
-	if len(sources) == 0 {
-		log.Fatalln("no GIT sources provided")
-	}
-
-	return sources
 }
 
 func newCmd(name string, common *flag.FlagSet) *flag.FlagSet {

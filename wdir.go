@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"path"
 	"sync"
 )
@@ -11,14 +12,18 @@ type WorkingDir struct {
 	directory string
 	git       Git
 	fs        FileSystem
+	config    Config
+	cache     ICache
 }
 
-func NewWorkingDir(directory string) WorkingDir {
+func NewWorkingDir(directory string, config Config, cache ICache) WorkingDir {
 	cmd := NewOSExec()
 	return WorkingDir{
 		directory: directory,
 		git:       NewGitAPI(cmd),
 		fs:        NewOSFileSystem(cmd),
+		config:    config,
+		cache:     cache,
 	}
 }
 
@@ -30,17 +35,19 @@ type DoneOpts struct {
 	Force bool
 }
 
-func (wd WorkingDir) Start(projects []string, sources, editors []string, opts StartOpts) error {
+func (wd WorkingDir) Start(projects, sources []string, editor string, opts StartOpts) error {
 	if len(projects) == 0 {
 		return fmt.Errorf("no projects to start specified")
 	}
-	if len(sources) == 0 {
-		return fmt.Errorf("no GIT sources specified")
-	}
-
 	var lastProjectPath string
+	editors := wd.getEditors(editor)
 
 	for _, project := range projects {
+		sources = wd.getSources(project, sources)
+		if len(sources) == 0 {
+			return fmt.Errorf("no GIT sources specified")
+		}
+
 		projPath := wd.projectPath(project)
 		exists, err := wd.fs.Exists(projPath)
 		if err != nil {
@@ -53,7 +60,7 @@ func (wd WorkingDir) Start(projects []string, sources, editors []string, opts St
 			continue
 		}
 
-		err = wd.clone(wd.directory, project, sources)
+		err = wd.clone(project, sources)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -101,12 +108,14 @@ func (wd WorkingDir) Done(projects []string, opts DoneOpts) error {
 	return nil
 }
 
-func (wd WorkingDir) clone(dir, project string, sources []string) error {
+func (wd WorkingDir) clone(project string, sources []string) error {
 	for _, source := range sources {
 		err := wd.git.Clone(path.Join(source, project), wd.projectPath(project))
 		if err != nil {
 			log.Printf("%s\nTrying other sources...", err)
 		} else {
+			wd.cache.Set(project, ProjectInfo{Source: source})
+			wd.cache.Write()
 			return nil
 		}
 	}
@@ -158,4 +167,35 @@ func (wd WorkingDir) removeSafe(path string) {
 
 func (wd WorkingDir) projectPath(name string) string {
 	return path.Join(wd.directory, name)
+}
+
+func (wd WorkingDir) getEditors(editor string) []string {
+	editors := []string{}
+	if editor != "" {
+		editors = append(editors, editor)
+	}
+	if wd.config.Editor != "" {
+		editors = append(editors, wd.config.Editor)
+	}
+
+	envEditor, envEditorSet := os.LookupEnv("EDITOR")
+	if envEditorSet {
+		editors = append(editors, envEditor)
+	}
+	editors = append(editors, []string{"vim", "vi"}...)
+	return editors
+}
+
+func (wd WorkingDir) getSources(project string, sources []string) []string {
+	mergedSources := []string{}
+	projectCacheInfo := wd.cache.Get(project)
+
+	mergedSources = append(mergedSources, sources...)
+
+	if projectCacheInfo.Source != "" {
+		mergedSources = append(mergedSources, projectCacheInfo.Source)
+	}
+
+	mergedSources = append(mergedSources, wd.config.Sources...)
+	return mergedSources
 }
