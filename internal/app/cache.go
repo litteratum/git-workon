@@ -78,23 +78,33 @@ func getCacheDir() string {
 
 	return path.Join(systemDir, "git_workon")
 }
-
 func createCacheFile() *Cache {
 	data := map[string]ProjectInfo{}
 
 	dir := filepath.Dir(cachePath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("failed to create cache dirs %s: %s", dir, err)
+		return nil
 	}
 
-	f, err := os.OpenFile(cachePath, os.O_CREATE|os.O_EXCL, 0o644)
+	// Create the cache file only if it does not exist
+	f, err := os.OpenFile(cachePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
+		// If the file already exists, there's nothing to do
 		if pe, ok := err.(*os.PathError); ok && pe.Err == syscall.EEXIST {
 			return nil
 		}
 		log.Printf("failed to create cache file %s: %s", cachePath, err)
+		return nil
 	}
 	defer f.Close()
+
+	// Write an empty JSON object to initialize the cache
+	encoder := json.NewEncoder(f)
+	if err := encoder.Encode(data); err != nil {
+		log.Printf("failed to write initial cache to %s: %s", cachePath, err)
+		return nil
+	}
 
 	return NewCache(data)
 }
