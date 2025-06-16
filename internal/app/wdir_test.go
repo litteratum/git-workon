@@ -161,7 +161,7 @@ func buildWorkingDir(comps wdComponents) WorkingDir {
 	}
 }
 
-func TestStart(t *testing.T) {
+func TestGo(t *testing.T) {
 	t.Run("no project; cloned; not opened", func(t *testing.T) {
 		fs := NewFakeFS()
 		git := NewFakeGit(fs).WithSources([]string{"dsource/proj", "dsource2/proj"})
@@ -171,11 +171,11 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start(
+		err := wd.Go(
 			[]string{"proj"},
 			[]string{"dsource", "dsource2"},
 			"vi",
-			StartOpts{Open: false},
+			GoOpts{Open: false},
 		)
 
 		require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start([]string{"proj"}, []string{"dsource"}, "vim", StartOpts{Open: true})
+		err := wd.Go([]string{"proj"}, []string{"dsource"}, "vim", GoOpts{Open: true})
 		require.NoError(t, err)
 
 		repo := fs.repos["/dwd/proj"]
@@ -211,7 +211,7 @@ func TestStart(t *testing.T) {
 				git: git,
 			},
 		)
-		err := wd.Start([]string{"proj"}, []string{"dsource"}, "vim", StartOpts{Open: true})
+		err := wd.Go([]string{"proj"}, []string{"dsource"}, "vim", GoOpts{Open: true})
 		require.NoError(t, err)
 
 		repo := fs.repos["/dwd/proj"]
@@ -219,12 +219,12 @@ func TestStart(t *testing.T) {
 	})
 	t.Run("projects are empty", func(t *testing.T) {
 		wd := buildWorkingDir(wdComponents{})
-		err := wd.Start([]string{}, []string{"s1"}, "", StartOpts{})
+		err := wd.Go([]string{}, []string{"s1"}, "", GoOpts{})
 		require.Error(t, err)
 	})
 	t.Run("sources are empty", func(t *testing.T) {
 		wd := buildWorkingDir(wdComponents{})
-		err := wd.Start([]string{"p1"}, []string{}, "", StartOpts{})
+		err := wd.Go([]string{"p1"}, []string{}, "", GoOpts{})
 		require.Error(t, err)
 	})
 	t.Run("source from cache", func(t *testing.T) {
@@ -245,7 +245,7 @@ func TestStart(t *testing.T) {
 			cache: cache,
 		})
 
-		err := wd.Start([]string{"p1"}, []string{}, "", StartOpts{})
+		err := wd.Go([]string{"p1"}, []string{}, "", GoOpts{})
 		require.NoError(t, err)
 		require.Equal(t, cache.Writes, 1)
 	})
@@ -259,7 +259,7 @@ func TestStart(t *testing.T) {
 			cache: cache,
 		})
 
-		err := wd.Start([]string{"p1"}, []string{"s"}, "", StartOpts{})
+		err := wd.Go([]string{"p1"}, []string{"s"}, "", GoOpts{})
 		require.NoError(t, err)
 		require.Equal(t, cache.Data, map[string]ProjectInfo{"p1": {Source: "s"}})
 	})

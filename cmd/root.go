@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 Safely remove projects from the working directory (the tool will ensure you
 have not left anything unpublished).
 
-gw start <project> --open
+gw go <project> --open
 gw done <project>
 `,
 }

@@ -27,7 +27,7 @@ func NewWorkingDir(directory string, config Config, cache ICache) WorkingDir {
 	}
 }
 
-type StartOpts struct {
+type GoOpts struct {
 	Open bool
 }
 
@@ -35,9 +35,9 @@ type DoneOpts struct {
 	Force bool
 }
 
-func (wd WorkingDir) Start(projects, sources []string, editor string, opts StartOpts) error {
+func (wd WorkingDir) Go(projects, sources []string, editor string, opts GoOpts) error {
 	if len(projects) == 0 {
-		return fmt.Errorf("no projects to start specified")
+		return fmt.Errorf("no projects to go specified")
 	}
 	var lastProjectPath string
 	editors := wd.getEditors(editor)

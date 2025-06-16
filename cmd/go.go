@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func buildStartCommand() *cobra.Command {
+func buildGoCommand() *cobra.Command {
 	var (
 		open      bool
 		directory string
@@ -14,7 +14,7 @@ func buildStartCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "start <project>...",
+		Use:   "go <project>...",
 		Short: "Start the project",
 		Long: `Clone the project (if needed) into the working directory.
 Sources from the configuration are used but may be extended by -s/--source.
@@ -32,11 +32,11 @@ Override the editor using -e/--editor.
 			cache := app.NewCacheFromFile()
 			ensureDir(&directory, config.Dir)
 			wd := app.NewWorkingDir(directory, config, cache)
-			return wd.Start(
+			return wd.Go(
 				args,
 				sources,
 				editor,
-				app.StartOpts{
+				app.GoOpts{
 					Open: open,
 				},
 			)
@@ -53,5 +53,5 @@ Override the editor using -e/--editor.
 }
 
 func init() {
-	rootCmd.AddCommand(buildStartCommand())
+	rootCmd.AddCommand(buildGoCommand())
 }
