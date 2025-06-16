@@ -5,7 +5,7 @@ You define a working directory and use the tool to start/stop working on a proje
 ### Basic usage
 Start the project and open it:
 ```bash
-gw start myproject --open
+gw go myproject --open
 ```
 
 When done, make it done:
@@ -60,10 +60,10 @@ Configuration example:
 ```
 
 ### Start to work on a project
-When it is time to work on some project, use the `start` command:
+When it is time to work on some project, use the `go` command:
 
 ```bash
-gw start <project_name> [more projects] [options]
+gw go <project_name> [more projects] [options]
 ```
 
 This command will:
@@ -75,7 +75,7 @@ This command will:
   * clone it from git sources into the working directory
   * open the project with a configured editor if the `-o/--open` flag is set
 
-See `gw start --help` for other available options on how to control the command.
+See `gw go --help` for other available options on how to control the command.
 
 ### Finish your work with a project
 When you are done with your work, use `done` command:
