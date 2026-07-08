@@ -45,7 +45,7 @@ func LoadConfig() Config {
 	var config Config
 
 	if _, err = os.Stat(ConfigPath); os.IsNotExist(err) {
-		config := NewDefaultConfig()
+		config = NewDefaultConfig()
 		fh, err := os.Create(ConfigPath)
 		if err != nil {
 			log.Fatalf("failed to create the configuration file at %s: %s", ConfigPath, err)

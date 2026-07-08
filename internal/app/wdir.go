@@ -45,8 +45,8 @@ func (wd WorkingDir) Go(projects, sources []string, editor string, opts GoOpts) 
 	editors := wd.getEditors(editor)
 
 	for _, project := range projects {
-		sources = wd.getSources(project, sources)
-		if len(sources) == 0 {
+		projectSources := wd.getSources(project, sources)
+		if len(projectSources) == 0 {
 			return fmt.Errorf("no GIT sources specified")
 		}
 
@@ -62,7 +62,7 @@ func (wd WorkingDir) Go(projects, sources []string, editor string, opts GoOpts) 
 			continue
 		}
 
-		err = wd.clone(project, sources)
+		err = wd.clone(project, projectSources)
 		if err != nil {
 			log.Println(err)
 			continue

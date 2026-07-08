@@ -24,7 +24,7 @@ func ensureDir(directory *string, configDir string) {
 		*directory = configDir
 	}
 
-	err := os.Mkdir(*directory, 0755)
+	err := os.MkdirAll(*directory, 0755)
 	if err != nil && !os.IsExist(err) {
 		log.Fatalf("failed to create the directory \"%s\": %s", *directory, err)
 	}

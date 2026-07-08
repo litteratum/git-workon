@@ -37,6 +37,7 @@ func (c Cache) Write() {
 	data, err := json.MarshalIndent(c.Data, "", "  ")
 	if err != nil {
 		log.Printf("failed to marshal the cache: %s", err)
+		return
 	}
 
 	err = os.WriteFile(cachePath, data, 0644)
