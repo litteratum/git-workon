@@ -11,10 +11,11 @@ import (
 )
 
 type wdComponents struct {
-	dir   string
-	fs    FileSystem
-	git   Git
-	cache ICache
+	dir      string
+	fs       FileSystem
+	git      Git
+	cache    ICache
+	projects IProjects
 }
 
 type FakeRepo struct {
@@ -145,6 +146,29 @@ func NewFakeCache(data map[string]ProjectInfo) *FakeCache {
 	}
 }
 
+// FakeProjects implements IProjects in memory (no disk) and counts persists.
+type FakeProjects struct {
+	Names  []string
+	Writes int
+}
+
+func (fp *FakeProjects) List() []string {
+	return fp.Names
+}
+
+func (fp *FakeProjects) Add(project string) {
+	if slices.Contains(fp.Names, project) {
+		return
+	}
+	fp.Names = append(fp.Names, project)
+	slices.Sort(fp.Names)
+	fp.Writes++
+}
+
+func NewEmptyFakeProjects() *FakeProjects {
+	return &FakeProjects{Names: []string{}}
+}
+
 func buildWorkingDir(comps wdComponents) WorkingDir {
 	if comps.dir == "" {
 		comps.dir = "/dwd"
@@ -152,12 +176,16 @@ func buildWorkingDir(comps wdComponents) WorkingDir {
 	if comps.cache == nil {
 		comps.cache = NewEmptyFakeCache()
 	}
+	if comps.projects == nil {
+		comps.projects = NewEmptyFakeProjects()
+	}
 	return WorkingDir{
 		directory: comps.dir,
 		fs:        comps.fs,
 		git:       comps.git,
 		config:    NewDefaultConfig(),
 		cache:     comps.cache,
+		projects:  comps.projects,
 	}
 }
 
@@ -262,6 +290,38 @@ func TestGo(t *testing.T) {
 		err := wd.Go([]string{"p1"}, []string{"s"}, "", GoOpts{})
 		require.NoError(t, err)
 		require.Equal(t, cache.Data, map[string]ProjectInfo{"p1": {Source: "s"}})
+	})
+	t.Run("cloned project registered", func(t *testing.T) {
+		fs := NewFakeFS()
+		git := NewFakeGit(fs).WithSources([]string{"s/p1"})
+		projects := NewEmptyFakeProjects()
+		wd := buildWorkingDir(wdComponents{
+			fs:       fs,
+			git:      git,
+			projects: projects,
+		})
+
+		err := wd.Go([]string{"p1"}, []string{"s"}, "", GoOpts{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"p1"}, projects.List())
+		require.Equal(t, 1, projects.Writes)
+	})
+	t.Run("existing project not registered", func(t *testing.T) {
+		fs := NewFakeFS().WithRepos(
+			map[string]*FakeRepo{"/dwd/p1": {path: "/dwd/p1"}},
+		)
+		git := NewFakeGit(fs)
+		projects := NewEmptyFakeProjects()
+		wd := buildWorkingDir(wdComponents{
+			fs:       fs,
+			git:      git,
+			projects: projects,
+		})
+
+		err := wd.Go([]string{"p1"}, []string{"s"}, "", GoOpts{})
+		require.NoError(t, err)
+		require.Empty(t, projects.List())
+		require.Equal(t, 0, projects.Writes)
 	})
 }
 

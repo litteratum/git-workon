@@ -12,14 +12,16 @@ func buildDoneCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "done [<project>...]",
-		Short: "Finish the project",
-		Long:  `Remove the project(s) from the working directory`,
+		Use:               "done [<project>...]",
+		Short:             "Finish the project",
+		Long:              `Remove the project(s) from the working directory`,
+		ValidArgsFunction: completeProjects,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config := app.LoadConfig()
 			cache := app.NewCacheFromFile()
+			projects := app.NewProjectsFromFile()
 			ensureDir(&directory, config.Dir)
-			wd := app.NewWorkingDir(directory, config, cache)
+			wd := app.NewWorkingDir(directory, config, cache, projects)
 			return wd.Done(
 				args,
 				app.DoneOpts{Force: force},

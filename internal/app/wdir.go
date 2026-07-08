@@ -14,9 +14,10 @@ type WorkingDir struct {
 	fs        FileSystem
 	config    Config
 	cache     ICache
+	projects  IProjects
 }
 
-func NewWorkingDir(directory string, config Config, cache ICache) WorkingDir {
+func NewWorkingDir(directory string, config Config, cache ICache, projects IProjects) WorkingDir {
 	cmd := NewOSExec()
 	return WorkingDir{
 		directory: directory,
@@ -24,6 +25,7 @@ func NewWorkingDir(directory string, config Config, cache ICache) WorkingDir {
 		fs:        NewOSFileSystem(cmd),
 		config:    config,
 		cache:     cache,
+		projects:  projects,
 	}
 }
 
@@ -116,6 +118,7 @@ func (wd WorkingDir) clone(project string, sources []string) error {
 		} else {
 			wd.cache.Set(project, ProjectInfo{Source: source})
 			wd.cache.Write()
+			wd.projects.Add(project)
 			return nil
 		}
 	}
