@@ -97,16 +97,28 @@ func (wd WorkingDir) Done(projects []string, opts DoneOpts) error {
 		}
 	}
 
+	// Compute each project's removal decision concurrently: reading the Git
+	// state can do network I/O, so parallelizing it is the point of the fan-out.
+	// Each goroutine writes only to its own slice slot, so no shared state is
+	// mutated here. All mutation (removal) happens single-threaded after the
+	// barrier below.
+	removable := make([]bool, len(gitRepos))
 	var wg sync.WaitGroup
 	wg.Add(len(gitRepos))
-	for _, repo := range gitRepos {
-		go func(r string) {
+	for i, repo := range gitRepos {
+		go func(i int, project string) {
 			defer wg.Done()
-			wd.done(repo, opts)
-		}(repo)
+			removable[i] = wd.shouldRemove(project, opts)
+		}(i, repo)
+	}
+	wg.Wait()
+
+	for i, repo := range gitRepos {
+		if removable[i] {
+			wd.removeSafe(wd.projectPath(repo))
+		}
 	}
 
-	wg.Wait()
 	return nil
 }
 
@@ -139,26 +151,29 @@ func (wd WorkingDir) open(path string, editors []string) error {
 	return fmt.Errorf("failed to open \"%s\". Tried all configured editors", path)
 }
 
-func (wd WorkingDir) done(project string, opts DoneOpts) {
+// shouldRemove reports whether the project may be safely removed. It performs
+// only read-only work (Git state inspection plus logging), so it is safe to
+// call concurrently; the actual removal is left to the caller.
+func (wd WorkingDir) shouldRemove(project string, opts DoneOpts) bool {
 	projectPath := wd.projectPath(project)
 
 	if opts.Force {
 		log.Printf("forcefully removing \"%s\"", projectPath)
-		wd.removeSafe(projectPath)
-		return
+		return true
 	}
 
 	state, err := wd.git.GetProjectState(projectPath)
 	if err != nil {
 		log.Printf("failed to get state of \"%s\": %s", projectPath, err)
-		return
+		return false
 	}
 
 	if state.Clean() {
-		wd.removeSafe(projectPath)
-	} else {
-		log.Printf("\"%s\" will not be removed: the project is not clean:\n%s", projectPath, state)
+		return true
 	}
+
+	log.Printf("\"%s\" will not be removed: the project is not clean:\n%s", projectPath, state)
+	return false
 }
 
 func (wd WorkingDir) removeSafe(path string) {
