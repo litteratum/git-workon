@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 )
 
 type Git interface {
@@ -46,7 +47,8 @@ func (state GitProjectState) Clean() bool {
 }
 
 type GitAPI struct {
-	cmd CMD
+	cmd    CMD
+	tagsMu *sync.Mutex
 }
 
 func (g GitAPI) GetProjectState(path string) (GitProjectState, error) {
@@ -102,6 +104,9 @@ func (g GitAPI) getGitStashes(path string) (string, error) {
 }
 
 func (g GitAPI) getGitTags(path string) (string, error) {
+	g.tagsMu.Lock()
+	defer g.tagsMu.Unlock()
+
 	result, err := g.cmd.RunCwd(path, "git", []string{"push", "--tags", "--dry-run"})
 	if err != nil {
 		return "", err
@@ -134,6 +139,7 @@ func (g GitAPI) getGitStatus(path string) (string, error) {
 
 func NewGitAPI(cmd CMD) GitAPI {
 	return GitAPI{
-		cmd: cmd,
+		cmd:    cmd,
+		tagsMu: &sync.Mutex{},
 	}
 }
